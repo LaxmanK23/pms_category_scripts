@@ -1,72 +1,63 @@
 import pandas as pd
-from collections import defaultdict
 
-# Load your CSV file
-file_path = "Fivestar Components Data - items report.CSV.csv"
-df = pd.read_csv(file_path)
+# Load your Excel file
+file_path = "myexcel.xlsx"
+df = pd.read_excel(file_path)
 
-# Extract relevant columns
-components_df = df[['Unnamed: 0', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 15']].copy()
-components_df.columns = ['Item Name', 'Description', 'Detail 1', 'Detail 2', 'Category Hint']
+# Fill NaN to avoid errors in string operations
+df = df.fillna("")
 
-# Clean data
-components_df.dropna(subset=['Item Name'], inplace=True)
-components_df.drop_duplicates(subset=['Item Name'], inplace=True)
+# Step 1: Combine relevant fields for keyword search
+search_columns = ['component name', 'Drawing Info', 'Part Name', 'equipment']
+df['search_string'] = df[search_columns].astype(str).agg(' '.join, axis=1).str.upper()
 
-# Define category mappings
-category_map = {
-    "Ship General": "1",
-    "Hull": "2",
-    "Equipment For Cargo": "3",
-    "Ship Equipment": "4",
-    "Equipment For Crew And Passengers": "5",
-    "Machinery Main Components": "6",
-    "Systems For Machinery Main Components": "7",
-    "Ship Common Systems": "8",
-    "HVAC System": "9"
+# Step 2: Define rules to detect TYPE
+type_keywords = {
+    'component': ['CYLINDER', 'ROD', 'RING', 'VALVE', 'PISTON', 'CASE', 'COMPRESSOR', 'PIN', 'COVER', 'METAL'],
+    'spare': ['SPARE', 'REPLACEMENT', 'STOCK', 'MAINTENANCE', 'STORAGE'],
+    'store': ['PAINT', 'CLEANER', 'RAG', 'TOOL', 'BRUSH', 'TAPE', 'LUBRICANT', 'SUPPLY', 'CONSUMABLE']
 }
 
-# Manual classification sample
-classification_samples = {
-    "AUX. AIR COMPRESSOR SANWA IRON GS3A": "6",
-    "AUX. AIR COMPRESSOR YANMAR CY410200": "6",
-    "AUX. AIR RESERVOIR HEMMI IRON 0.05 X 30 KG/CM2": "7",
-    "AUXILIARY BLOWER H.H.I. TBCB-060F-7526": "9",
-    "AUXILIARY BLOWER HYUNDAI MARINE HAA-334/120N, ...": "9",
-    "AUXILIARY BLOWER HYUNDAI MARINE HAR-334/80N": "9",
-    "AUXILIARY BLOWER OSAKA BLOWER": "9",
-    "AUXILIARY BLOWER NISHISHIBA TB-57M": "9",
-    "AUXILIARY BLOWER": "9",
-    "ACCOMM LADDER": "5"
+# Default all as unknown
+df['type'] = 'unknown'
+
+# Apply type classification
+for type_name, keywords in type_keywords.items():
+    pattern = '|'.join(keywords)
+    mask = df['search_string'].str.contains(pattern, case=False, na=False)
+    df.loc[mask, 'type'] = type_name
+
+# Step 3: Categorize components only
+df['category'] = ''
+
+# Only focus on component rows for categorization
+component_df = df['type'] == 'component'
+
+component_categories = {
+    "Ship General": ["REENA", "ACCOMM", "ACCOMODATION", "SHIP GENERAL"],
+    "Hull": ["HULL", "PLATE", "WELD", "STRUCTURE"],
+    "Equipment For Cargo": ["CARGO", "TANK", "PIPELINE", "VALVE CARGO"],
+    "Ship Equipment": ["ANCHOR", "WINCH", "CAPSTAN", "MOORING"],
+    "Equipment For Crew And Passengers": ["LADDER", "BED", "SEAT", "TOILET", "SHOWER"],
+    "Machinery Main Components": ["CRANK", "PISTON", "ROD", "CYLINDER", "ENGINE", "COMPRESSOR", "PIN METAL"],
+    "Systems For Machinery Main Components": ["AIR COOLER", "FUEL SYSTEM", "OIL PUMP", "WATER PUMP"],
+    "Ship Common Systems": ["FIRE", "BILGE", "BALLAST", "COMMON", "DRAIN"],
+    "HVAC System": ["AIR CONDITIONING", "A/C", "VENTILATION", "BLOWER", "HVAC"]
 }
 
-# Apply classification
-components_df["Main Category"] = components_df["Item Name"].map(classification_samples)
-components_df["Main Category Name"] = components_df["Main Category"].map({v: k for k, v in category_map.items()})
+# Apply component category classification
+for category, keywords in component_categories.items():
+    pattern = '|'.join(keywords)
+    mask = component_df & df['search_string'].str.contains(pattern, case=False, na=False)
+    df.loc[mask, 'category'] = category
 
-# Filter only classified
-classified_df = components_df.dropna(subset=["Main Category"]).copy()
+# Set default if category is still blank
+df.loc[(df['type'] == 'component') & (df['category'] == ''), 'category'] = 'Uncategorized'
 
-# Assign hierarchical codes
-category_counters = defaultdict(lambda: defaultdict(int))
-codes = []
+# Clean up helper column
+df.drop(columns=['search_string'], inplace=True)
 
-for _, row in classified_df.iterrows():
-    cat = row["Main Category"]
-
-    # Sub-category code
-    category_counters[cat]["level1"] += 1
-    level1 = f"{int(cat)}0{category_counters[cat]['level1']}"
-
-    # Sub-sub-category
-    category_counters[cat][level1] += 1
-    level2 = f"{level1}0{category_counters[cat][level1]}"
-
-    codes.append(level2)
-
-classified_df["Component Code"] = codes
-
-# Export to Excel
-output_file = "Classified_Ship_Components.xlsx"
-classified_df.to_excel(output_file, index=False)
-print(f"✅ Exported to: {output_file}")
+# Save the results
+output_path = "classified_myexcel_output.xlsx"
+df.to_excel(output_path, index=False)
+print(f"✅ Excel file saved as: {output_path}")
