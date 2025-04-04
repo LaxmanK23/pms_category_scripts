@@ -105,7 +105,7 @@ def classify_chunk(start_idx, rows):
     return results
 
 # STEP 6: Run in parallel (multi-threading)
-chunk_size = 10
+chunk_size = 100
 all_results = []
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
@@ -134,7 +134,7 @@ for i, row in df.iterrows():
     if cat not in type_counters:
         type_counters[cat] = {}
     if typ not in type_counters[cat]:
-        type_counters[cat][typ] = len(type_counters[cat]) + 10
+        type_counters[cat][typ] = len(type_counters[cat]) + 100
     type_id = type_counters[cat][typ]
 
     key = f"{cat}-{typ}"
