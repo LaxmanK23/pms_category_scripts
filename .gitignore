@@ -1,2 +1,3 @@
 # igone venv
 venv/
+.env
