@@ -33,86 +33,60 @@ def split_excel_to_chunks():
             print(f"📦 Created: {chunk_path}")
 
 
-def make_prompt(rows):
-    prompt = """
-    You are a classification model for ship PMS (Planned Maintenance System) components. You will be given a table with a list of ship PMS components in the following format:
+def make_prompt(data):
+    """
+    This function generates a prompt for the AI model to categorize the ship PMS components.
+    The categories are predefined, and the model should classify each row accordingly.
+    """
 
-plan code, vessel plan code, component plan code, plan name, component, manufacturer, value, frequency, responsibility, parent component.
+    prompt = "Please classify the following ship PMS components based on their type and functionality into one of the predefined categories. Then, assign each a unique code.\n\n"
+    for row in data:
+        # Use the correct column name for manufacture
+        plan_name = row.get('plan name', 'N/A')
+        component = row.get('component', 'N/A')
+        manufacture = row.get('manufacture', 'N/A')  # Corrected column name
+        value = row.get('value', 'N/A')
 
-Example entries:
-- ZHEOS01, HTR001, HTRJB001, FIVE YEAR ROUTINE - HEATER, HEATER COMPLETE, OSAKA STEAM HEATER STANEX S154, 60, M, Engineer, heater
-- VHFFUFM2, VHF001, VHFJB001, CHECK OPERATION, COMPLETE 2-WAY VHF, 2-WAY VHF RADIO TELEPHONE FURUNO FM-8, 1, M, D, vhf system
-- VHFFUFM2, VHF001, VHFJB002, CHECK/CHANGE BATTERY, COMPLETE 2-WAY VHF, 2-WAY VHF RADIO TELEPHONE FURUNO FM-8, 12, M, D, vhf system
-- VHFFUFM2, VHF001, VHFJB003, CHECK GEN. CONDITION, COMPLETE 2-WAY VHF, 2-WAY VHF RADIO TELEPHONE FURUNO FM-8, 1, M, D, vhf system
+        prompt += f"Plan Name: {plan_name}, Component: {component}, Manufacturer: {manufacture}, Value: {value}\n"
 
-### Instructions:
-1. **Hierarchy and Classification:**
-   - Arrange the components in a logical hierarchy based on their relationship to one another. For instance, subcomponents (like "COMPLETE 2-WAY VHF") should be grouped under their parent component (like "VHF system").
-   - Assign a **category** to each component based on the following predefined categories:
-     - `01 Hull Integrity`
-     - `02 Manoeuvrability`
-     - `03 Mooring`
-     - `04 Cargo Handling`
-     - `05 Communication`
-     - `06 Navigation`
-     - `07 Other`
-
-2. **Category and Code Generation:**
-   - Add a new column labeled **"category"** where you classify each component into one of the above categories.
-   - Generate a unique **"code"** for each component based on its category and hierarchy:
-     - The **code** format should be as follows:
-       - **Level 1** (Primary component): `XX.001` (e.g., `01.001` for the first item under "Hull Integrity").
-       - **Level 2** (Subcomponents): `XX.001.001`, `XX.001.002`, etc.
-       - The number after the period should represent the position in the hierarchy.
-   
-3. **Output Requirements:**
-   - You need to provide an updated table with the same columns as the input, plus two new columns: **"category"** and **"code"**.
-   - Ensure that each row's "category" and "code" reflect its position and type within the hierarchy.
-   
-4. **Example Output:**
-   After processing, your table should look something like this:
-
-| plan code | vessel plan code | component plan code | plan name         | component            | manufacturer              | value | frequency | responsibility | parent component | category  | code     |
-|-----------|------------------|---------------------|-------------------|-----------------------|---------------------------|-------|-----------|----------------|------------------|-----------|----------|
-| ZHEOS01   | HTR001           | HTRJB001             | FIVE YEAR ROUTINE - HEATER | HEATER COMPLETE      | OSAKA STEAM HEATER STANEX S154 | 60    | M         | Engineer        | heater           | 01 Hull Integrity | 01.001  |
-| VHFFUFM2  | VHF001           | VHFJB001             | CHECK OPERATION   | COMPLETE 2-WAY VHF     | 2-WAY VHF RADIO TELEPHONE FURUNO FM-8 | 1     | M         | D              | vhf system       | 05 Communication   | 05.001  |
-| VHFFUFM2  | VHF001           | VHFJB002             | CHECK/CHANGE BATTERY | COMPLETE 2-WAY VHF   | 2-WAY VHF RADIO TELEPHONE FURUNO FM-8 | 12    | M         | D              | vhf system       | 05 Communication   | 05.002  |
-| VHFFUFM2  | VHF001           | VHFJB003             | CHECK GEN. CONDITION | COMPLETE 2-WAY VHF  | 2-WAY VHF RADIO TELEPHONE FURUNO FM-8 | 1     | M         | D              | vhf system       | 05 Communication   | 05.003  |
-
-### Additional Notes:
-- If the component doesn't clearly fall into one of the predefined categories, classify it as "07 Other".
-- Ensure that the hierarchy is logical and follows a natural structure based on the data's relationships (e.g., subcomponents under their parent components).
-
-"""
+    prompt += "\nCategories to classify components into:\n"
+    prompt += "01 Hull Integrity\n02 Auxiliary Engine\n03 Electrical System\n04 Safety Equipment\n05 Communication\n06 Navigation\n"
+    prompt += "Generate the category and code for each task in the format `XX.YYY`.\n"
     return prompt
+
 
 
 def process_excel_chunk(chunk_path, output_path):
     df = pd.read_excel(chunk_path).fillna("")
     
+    # Generate the prompt with the data
     prompt = make_prompt(df.to_dict(orient="records"))
 
     # Generate content using the model
     response = model.generate_content(prompt)
-    print(f"🔍 Processing chunk: {response}")
     
     # Extract the content from the response (access the first part of the response)
     if response.candidates and len(response.candidates) > 0:
-        # Accessing 'text' from the first part of the response
         content = response.candidates[0].content
         classified_data = content.parts[0].text if content.parts else None
         
         if classified_data:
-            # Optionally, print out the classified data to ensure it's correct
+            # Print the classified data (optional, for debugging)
             print(f"Classified data:\n{classified_data}")
 
+            # Here, categorize and generate codes based on the model response
             categories = []
             codes = []
             
-            # Now, parse the response content and classify each component accordingly
             for index, row in df.iterrows():
-                category = "01"  # Placeholder: Replace with actual category parsing from `classified_data`
-                code = f"{category}.{index + 1:03d}"  # Placeholder: Replace with actual code generation
+                # Implement logic to map the category based on the model response
+                if 'Auxiliary Engine' in classified_data:  # Use the model's response to assign categories
+                    category = "02"  # For Auxiliary Engine
+                else:
+                    category = "01"  # Default to Hull Integrity (you can add more conditions based on other categories)
+
+                # Generate a unique code for each entry
+                code = f"{category}.{index + 1:03d}"
                 categories.append(category)
                 codes.append(code)
             
@@ -136,9 +110,9 @@ def main():
     for chunk_file in chunk_files:
         chunk_path = os.path.join(CHUNK_FOLDER, chunk_file)
         output_path = os.path.join(OUTPUT_FOLDER, f"classified_{chunk_file}")
-        if os.path.exists(output_path):
-            print(f"⏩ Skipping already processed: {chunk_file}")
-            continue
+        # if os.path.exists(output_path):
+        #     print(f"⏩ Skipping already processed: {chunk_file}")
+        #     continue
         print(f"🚀 Processing: {chunk_file}")
         process_excel_chunk(chunk_path, output_path)
 
